@@ -34,3 +34,7 @@ await request('7) /admin с токеном администратора:', '/adm
 const [h, , s] = token.split('.');
 const fakePayload = Buffer.from(JSON.stringify({ sub: '1', name: 'ivan', role: 'admin', exp: 9999999999 })).toString('base64url');
 await request('8) /admin с подделанным токеном:', '/admin', bearer(`${h}.${fakePayload}.${s}`));
+
+
+const noneHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+await request('9) /admin с токеном alg: none:', '/admin', bearer(`${noneHeader}.${fakePayload}.`));
