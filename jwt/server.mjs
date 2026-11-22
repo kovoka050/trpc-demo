@@ -3,8 +3,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const PORT = 4000;
 const SECRET = process.env.JWT_SECRET;
-if (!SECRET) {
-  console.error('Ошибка: не задана переменная окружения JWT_SECRET (см. .env.example)');
+if (!SECRET || SECRET.length < 32) {
+  console.error('Ошибка: JWT_SECRET должен содержать минимум 32 символа (см. jwt/.env.example)');
   process.exit(1);
 }
 const TOKEN_TTL_SEC = 60 * 60; 
@@ -50,9 +50,12 @@ function verifyToken(token) {
     throw new Error('Подпись не совпадает (токен подделан)');
   }
 
-
-  if (typeof payload.exp !== 'number') throw new Error('В токене нет срока действия (exp)');
-  if (payload.exp <= Math.floor(Date.now() / 1000)) throw new Error('Срок действия токена истёк');
+  if (!Number.isFinite(payload.exp)) {
+    throw new Error('Некорректный срок действия токена (exp)');
+  }
+  if (payload.exp <= Math.floor(Date.now() / 1000)) {
+    throw new Error('Срок действия токена истёк');
+  }
   return payload;
 }
 
