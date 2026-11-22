@@ -2,10 +2,14 @@ import http from 'node:http';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const PORT = 4000;
-const SECRET = 'my-secret-key'; 
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET) {
+  console.error('Ошибка: не задана переменная окружения JWT_SECRET (см. .env.example)');
+  process.exit(1);
+}
 const TOKEN_TTL_SEC = 60 * 60; 
 
-// "База данных" пользователей (для примера, пароли в открытом виде)
+// База данных пользователей
 const USERS = [
   { id: 1, username: 'ivan', password: '1234', role: 'user' },
   { id: 2, username: 'admin', password: 'admin', role: 'admin' },
@@ -28,14 +32,27 @@ function verifyToken(token) {
   if (parts.length !== 3) throw new Error('Неверный формат токена');
   const [h, p, signature] = parts;
 
+  let header, payload;
+  try {
+    header = JSON.parse(Buffer.from(h, 'base64url').toString());
+    payload = JSON.parse(Buffer.from(p, 'base64url').toString());
+  } catch {
+    throw new Error('Неверный формат токена');
+  }
+
+  if (header.alg !== 'HS256' || header.typ !== 'JWT') {
+    throw new Error('Недопустимый алгоритм подписи');
+  }
+
   const expected = Buffer.from(sign(`${h}.${p}`));
   const actual = Buffer.from(signature);
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
     throw new Error('Подпись не совпадает (токен подделан)');
   }
 
-  const payload = JSON.parse(Buffer.from(p, 'base64url').toString());
-  if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error('Срок действия токена истёк');
+
+  if (typeof payload.exp !== 'number') throw new Error('В токене нет срока действия (exp)');
+  if (payload.exp <= Math.floor(Date.now() / 1000)) throw new Error('Срок действия токена истёк');
   return payload;
 }
 
@@ -55,18 +72,17 @@ function readBody(req) {
   });
 }
 
-
 function authenticate(req) {
   const header = req.headers.authorization || '';
   if (!header.startsWith('Bearer ')) throw new Error('Токен не передан');
   return verifyToken(header.slice(7));
 }
 
-// Сервер
+//Сервер 
 const server = http.createServer(async (req, res) => {
   console.log(`${req.method} ${req.url}`);
 
-  
+
   if (req.method === 'POST' && req.url === '/login') {
     try {
       const { username, password } = await readBody(req);
@@ -91,6 +107,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+ 
   if (req.method === 'GET' && req.url === '/admin') {
     try {
       const payload = authenticate(req);
